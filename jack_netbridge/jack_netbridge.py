@@ -9,6 +9,7 @@ import struct
 import threading
 import queue
 import argparse
+import time
 
 import jack
 import mido
@@ -23,12 +24,15 @@ class BaseJackNetworkBridge(ABC):
     def __init__(self, jack_client_name, jack_port_name: str):
         self.jack_port_name = jack_port_name
         self.jack_client_name = jack_client_name
+        self.stop_event = None
 
     def start(self):
         with self.client:
             print("JACK client activated:", self.jack_client_name)
-            input(f"Press Ctrl-C to stop.")
-
+            while True:
+                time.sleep(1)
+                if self.stop_event.is_set():
+                    break
 
 class BaseReceiver(BaseJackNetworkBridge):
 
@@ -57,7 +61,8 @@ class BaseReceiver(BaseJackNetworkBridge):
         self.sock.bind((self.multicast_group, self.multicast_port))
         mreq = struct.pack("4sl", socket.inet_aton(self.multicast_group), socket.INADDR_ANY)
         self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
-        self.sock.settimeout(0.1)
+        self.sock.settimeout(1)
+
 
     @abstractmethod
     def listen_multicast(self):
@@ -79,6 +84,9 @@ class BaseTransmitter(BaseJackNetworkBridge):
         self.multicast_ttl = multicast_ttl
         self.multicast_port = multicast_port
         self.buffer_size = buffer_size
+        if self.buffer_size == 0:
+            self.buffer_size = 1024
+        self.buffer = bytearray()
         self.setup_multicast_socket()
 
     def setup_multicast_socket(self):
@@ -109,7 +117,7 @@ class MidiReceiver(BaseReceiver):
         self.listener_thread.start()
 
     def setup_jack(self) -> None:
-        self.client = jack.Client("MIDI_Receiver")
+        self.client = jack.Client(self.jack_client_name)
 
         if not self.client:
             raise RuntimeError("Failed to create JACK client.")
@@ -132,6 +140,8 @@ class MidiReceiver(BaseReceiver):
     def listen_multicast(self) -> None:
         print("listener thread started")
         while True:
+            if self.stop_event.is_set():
+                break
             try:
                 data, addr = self.sock.recvfrom(64)
                 print(f"Received data from {addr}: {data}")
@@ -155,7 +165,7 @@ class MidiTransmitter(BaseTransmitter):
         self.setup_jack()
 
     def setup_jack(self) -> None:
-        self.client = jack.Client("MIDI_Transmitter")
+        self.client = jack.Client(self.jack_client_name)
 
         if not self.client:
             raise RuntimeError("Failed to create JACK client.")
@@ -171,6 +181,7 @@ class MidiTransmitter(BaseTransmitter):
             self.send_multicast(data)
 
 class AudioReceiver(BaseReceiver):
+
     def __init__(self, jack_client_name: str, jack_port_name: str, multicast_group: str, interface_ip: str, multicast_ttl: int = DEFAULT_MULTICAST_TTL, multicast_port: int = DEFAULT_MULTICAST_PORT, buffer_size: int = 0) -> None:
         super().__init__(jack_client_name, jack_port_name, multicast_group, interface_ip, multicast_ttl, multicast_port, buffer_size)
 
@@ -196,23 +207,30 @@ class AudioReceiver(BaseReceiver):
             # Get JACK output buffer and clear it
             output_buffer = self.output_port.get_buffer()
             output_buffer = np.zeros(self.buffer_size, dtype=np.float32)
-            
+
             # Copy the received data into the buffer
             slice_length = min(len(audio_buffer_received), self.buffer_size)
             output_buffer[:slice_length] = audio_buffer_received[:slice_length]
 
     def listen_multicast(self) -> None:
         while True:
+            if self.stop_event is not None and self.stop_event.is_set():
+                print("breaking listen_multicast loop")
+                break
+            print("trying")
             try:
                 data, addr = self.sock.recvfrom(self.buffer_size * 4) # 4 because of float32
                 self.queue.put(data)
+                print("queue put ok")
             except Exception as e:
+                print(e)
                 pass
 
 class AudioTransmitter(BaseTransmitter):
+
     def __init__(self, jack_client_name: str, jack_port_name: str, multicast_group: str, interface_ip: str, multicast_ttl: int = DEFAULT_MULTICAST_TTL, multicast_port: int = DEFAULT_MULTICAST_PORT, buffer_size: int = 0) -> None:
         super().__init__(jack_client_name, jack_port_name, multicast_group, interface_ip, multicast_ttl, multicast_port, buffer_size)
-
+        print("instantiating audio transmitter")
         self.setup_jack()
 
     def setup_jack(self) -> None:
@@ -225,10 +243,10 @@ class AudioTransmitter(BaseTransmitter):
         self.client.set_process_callback(self.process_callback)
 
     def process_callback(self, frames: int) -> None:
-        audio_buffer = np.fromstring(self.input_port.get_buffer(), dtype=np.float32)
-        print("Sending audio to multicast...")
-        print(audio_buffer.tobytes()[:10])
-        self.send_multicast(audio_buffer.tobytes())
+        self.buffer.extend(self.input_port.get_array().tobytes())
+        if len(self.buffer) >= self.buffer_size:
+            self.send_multicast(self.buffer)
+            self.buffer.clear()
 
 
 def main() -> None:
@@ -264,7 +282,7 @@ def main() -> None:
         jack_port_name = "in"
     elif jack_port_name is None and "recv" in args.mode:
         jack_port_name = "out"
-    
+
 
     # Instantiate and start the appropriate daemon based on the mode.
     if args.mode == 'midi_send':
@@ -290,21 +308,21 @@ def main() -> None:
     elif args.mode == 'audio_send':
         daemon = AudioTransmitter(
             jack_client_name,
-            jack_port_name, 
-            args.multicast_group, 
-            args.interface_ip, 
-            args.multicast_ttl, 
-            args.multicast_port, 
+            jack_port_name,
+            args.multicast_group,
+            args.interface_ip,
+            args.multicast_ttl,
+            args.multicast_port,
             args.buffer_size
             )
     elif args.mode == 'audio_recv':
         daemon = AudioReceiver(
             jack_client_name,
-            jack_port_name, 
-            args.multicast_group, 
-            args.interface_ip, 
-            args.multicast_ttl, 
-            args.multicast_port, 
+            jack_port_name,
+            args.multicast_group,
+            args.interface_ip,
+            args.multicast_ttl,
+            args.multicast_port,
             args.buffer_size
             )
 

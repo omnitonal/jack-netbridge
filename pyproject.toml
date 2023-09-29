@@ -11,6 +11,7 @@ python = "^3.11"
 JACK-Client = "^0.5.4"
 numpy = "^1.26.0"
 mido = "^1.3.0"
+toml = "^0.10.2"
 
 [build-system]
 requires = ["poetry-core"]
@@ -18,3 +19,4 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
 jack_netbridge = "jack_netbridge.jack_netbridge:main"
+jnb_manager = "jack_netbridge.jnb_manager:main"
