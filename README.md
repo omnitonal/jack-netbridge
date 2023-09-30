@@ -4,57 +4,57 @@
 
 ## Installation
 
-1. Clone this repository:
-   ```
-   git clone https://github.com/your-username/jack_netbridge.git
-   ```
-
-2. Navigate to the cloned directory:
-   ```
-   cd jack_netbridge
-   ```
-
-3. Install the required dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
+```
+pip install jack-netbridge
+```
 
 ## Usage
 
 ```bash
-usage: jack_netbridge [-h] --mode {audio_send,audio_recv,midi_send,midi_recv}
-                      [--jack-client JACK_CLIENT] [--jack-port JACK_PORT]
-                      --multicast-group MULTICAST_GROUP
-                      [--multicast-port MULTICAST_PORT]
-                      [--multicast-ttl MULTICAST_TTL] --interface-ip
-                      INTERFACE_IP [--buffer-size BUFFER_SIZE]
+usage: jack_netbridge [-h] [-c CONFIG]
+
+jack_netbridge: send/receive Jack audio and MIDI as multicast streams
+
+options:
+  -h, --help                      Show this help message and exit.
+  -c CONFIG, --config CONFIG      Path to the configuration file.
 ```
 
-### Options:
+## Configuration file example
 
-- `-h, --help`: Show the help message and exit.
-- `--mode {audio_send,audio_recv,midi_send,midi_recv}`: The mode of operation.
-- `--jack-client JACK_CLIENT`: Name of the JACK client to register.
-- `--jack-port JACK_PORT`: Name of the JACK port to register.
-- `--multicast-group MULTICAST_GROUP`: Multicast group for sending/receiving data.
-- `--multicast-port MULTICAST_PORT`: Port number for multicast.
-- `--multicast-ttl MULTICAST_TTL`: Time-To-Live for multicast packets.
-- `--interface-ip INTERFACE_IP`: Network interface IP address to use for multicast.
-- `--buffer-size BUFFER_SIZE`: Buffer size for audio data.
+By default `jack_netbridge` will look for the `~/.jack_netbridge.toml` file to read configuration. Each section in the TOML file describes a client and a port with arbitrary names, separated by `:`.
 
-## Examples
+Configuration example:
 
-To send audio:
+```
+["audio_recv_L:out"]
+type = "AudioReceiver"
+multicast_group = "239.0.0.1"
+multicast_port = 4023
+multicast_ttl = 2
+interface_name = "eth1"
 
-```bash
-jack_netbridge --mode audio_send --jack-client AudioSender --jack-port AudioOut --multicast-group 239.0.0.1 --interface-ip 192.168.1.10
+["audio_recv_R:out"]
+type = "AudioReceiver"
+multicast_group = "239.0.0.1"
+multicast_port = 4024
+multicast_ttl = 2
+interface_name = "eth1"
+
+["midi_recv_R:in"]
+type = "MidiTransmitter"
+multicast_group = "239.0.0.1"
+multicast_port = 4025
+multicast_ttl = 2
+interface_name = "eth1"
+
 ```
 
-To receive audio:
+## Troubleshooting
 
-```bash
-jack_netbridge --mode audio_recv --jack-client AudioReceiver --jack-port AudioIn --multicast-group 239.0.0.1 --interface-ip 192.168.1.11
-```
+* Garbled audio: make sure that both sample rate and buffer size are identical for both receiver and transmitter.
+
+* No data sent or received: check if the current multicast group is sent / received on the right interface, e. g by checking `ip route` output.
 
 ## Contribution
 

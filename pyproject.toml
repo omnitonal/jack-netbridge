@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "jack-netbridge"
-version = "0.1.0"
+version = "0.2.0"
 description = "Send and receive Jack MIDI data as multicast streams over network."
 license = "GNU GPL v3"
 authors = ["omnitonal.com"]
@@ -11,6 +11,7 @@ python = "^3.11"
 JACK-Client = "^0.5.4"
 numpy = "^1.26.0"
 mido = "^1.3.0"
+toml = "^0.10.2"
 
 [build-system]
 requires = ["poetry-core"]
