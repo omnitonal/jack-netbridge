@@ -113,7 +113,6 @@ class MidiReceiver(BaseReceiver):
         self.midi_queue = queue.Queue()
         self.setup_jack()
 
-        print("Launching listener thread")
         self.listener_thread.start()
 
     def setup_jack(self) -> None:
@@ -133,18 +132,15 @@ class MidiReceiver(BaseReceiver):
             midi_data = self.midi_queue.get_nowait()
             msg = mido.parse_all(midi_data)
             for m in msg:
-                print("Parsed", msg)
                 self.port_handle.write_midi_event(0, m.bytes())
 
 
     def listen_multicast(self) -> None:
-        print("listener thread started")
         while True:
-            if self.stop_event.is_set():
+            if self.stop_event is not None and self.stop_event.is_set():
                 break
             try:
                 data, addr = self.sock.recvfrom(64)
-                print(f"Received data from {addr}: {data}")
                 self.midi_queue.put(data)
             except Exception as e:
                 pass
@@ -169,7 +165,6 @@ class MidiTransmitter(BaseTransmitter):
 
         if not self.client:
             raise RuntimeError("Failed to create JACK client.")
-        print("Client created")
 
         self.buffer_size = self.client.blocksize
         self.port_handle = self.client.midi_inports.register(self.jack_port_name)
@@ -177,7 +172,6 @@ class MidiTransmitter(BaseTransmitter):
 
     def process_callback(self, frames: int) -> None:
         for offset, data in self.port_handle.incoming_midi_events():
-            print("Sending to multicast...")
             self.send_multicast(data)
 
 class AudioReceiver(BaseReceiver):
@@ -186,7 +180,6 @@ class AudioReceiver(BaseReceiver):
         super().__init__(jack_client_name, jack_port_name, multicast_group, interface_ip, multicast_ttl, multicast_port, buffer_size)
 
         self.setup_jack()
-        print("Launching listener thread")
         self.listener_thread.start()
 
     def setup_jack(self) -> None:
@@ -212,14 +205,12 @@ class AudioReceiver(BaseReceiver):
                 data, addr = self.sock.recvfrom(self.buffer_size * 4) # 4 because of float32
                 self.queue.put(data)
             except Exception as e:
-                print(e)
                 pass
 
 class AudioTransmitter(BaseTransmitter):
 
     def __init__(self, jack_client_name: str, jack_port_name: str, multicast_group: str, interface_ip: str, multicast_ttl: int = DEFAULT_MULTICAST_TTL, multicast_port: int = DEFAULT_MULTICAST_PORT, buffer_size: int = 0) -> None:
         super().__init__(jack_client_name, jack_port_name, multicast_group, interface_ip, multicast_ttl, multicast_port, buffer_size)
-        print("instantiating audio transmitter")
         self.setup_jack()
 
     def setup_jack(self) -> None:
