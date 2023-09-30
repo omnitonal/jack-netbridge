@@ -1,14 +1,13 @@
 import toml
-import sys
-import signal
 import time
-import multiprocessing
 import threading
 import argparse
 import os
-from .jack_netbridge import MidiTransmitter, MidiReceiver, AudioTransmitter, AudioReceiver
+from .lib import MidiTransmitter, MidiReceiver, AudioTransmitter, AudioReceiver
+
 
 class Manager:
+
     def __init__(self, config_file):
         self.config_file = config_file
         self.processes = []
@@ -29,7 +28,7 @@ class Manager:
                 client_name,
                 port_name,
                 values['multicast_group'],
-                values['interface_ip'],
+                values['interface_name'],
                 values['multicast_ttl'],
                 values['multicast_port'],
                 values.get('buffer_size', None)  # Assuming buffer_size might be optional
@@ -75,22 +74,13 @@ class Manager:
             self.terminate_clients()
 
 def main():
-    parser = argparse.ArgumentParser(description="Manager for JACK client instances.")
+    parser = argparse.ArgumentParser(description="jack_netbridge: send/receive Jack audio and MIDI as multicast streams")
     parser.add_argument('-c', '--config', type=str, default=os.path.expanduser("~/.jack_netbridge.toml"),
                         help="Path to the configuration file.")
     args = parser.parse_args()
 
-    import cProfile
-    profiler = cProfile.Profile()
-    profiler.enable()
-
     manager = Manager(args.config)
     manager.run()
-
-    profiler.disable()
-    # profiler.print_stats(sort='cumulative')
-    # #profiler.dump_stats("cprofile.pstats")
-    # print("main exit")
 
 if __name__ == "__main__":
     main()
