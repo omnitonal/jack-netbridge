@@ -202,26 +202,15 @@ class AudioReceiver(BaseReceiver):
     def process_callback(self, frames: int) -> None:
         if not self.queue.empty():
             audio_data = self.queue.get_nowait()
-            audio_buffer_received = np.fromstring(audio_data, dtype=np.float32)
-
-            # Get JACK output buffer and clear it
-            output_buffer = self.output_port.get_buffer()
-            output_buffer = np.zeros(self.buffer_size, dtype=np.float32)
-
-            # Copy the received data into the buffer
-            slice_length = min(len(audio_buffer_received), self.buffer_size)
-            output_buffer[:slice_length] = audio_buffer_received[:slice_length]
+            self.output_port.get_buffer()[:] = np.fromstring(audio_data, dtype=np.float32)
 
     def listen_multicast(self) -> None:
         while True:
             if self.stop_event is not None and self.stop_event.is_set():
-                print("breaking listen_multicast loop")
                 break
-            print("trying")
             try:
                 data, addr = self.sock.recvfrom(self.buffer_size * 4) # 4 because of float32
                 self.queue.put(data)
-                print("queue put ok")
             except Exception as e:
                 print(e)
                 pass
