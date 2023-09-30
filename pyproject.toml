@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "jack-netbridge"
-version = "0.1.0"
+version = "0.2.0"
 description = "Send and receive Jack MIDI data as multicast streams over network."
 license = "GNU GPL v3"
 authors = ["omnitonal.com"]
